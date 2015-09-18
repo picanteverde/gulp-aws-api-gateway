@@ -3,7 +3,7 @@ module.exports = function forEachCallback(array, stepFunction, finishCallback, i
     index = array.length - 1;
   }
 
-  if (index === 0) {
+  if (index < 0) {
     process.nextTick(function() {
       finishCallback(null);
     });
