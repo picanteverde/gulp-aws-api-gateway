@@ -6,19 +6,55 @@ module.exports = function(awsApiGateway) {
     awsApiGateway.getResources(
       apiId,
       function(error, resources) {
-        forEachCallback(
-          paths,
-          function(path, nextStep) {
-            ensureResource(apiId, path, resources, nextStep);
-          },
-          callback
-        );
+
+        removeUnusedResourcePaths(apiId, paths, resources, function(error) {
+          if (error) {
+            callback(error);
+            return;
+          }
+
+          forEachCallback(
+            paths,
+            function(path, nextStep) {
+              ensureResource(apiId, path, resources, nextStep);
+            },
+            callback
+          );
+
+        });
 
       }
     );
   }
 
+  function removeUnusedResourcePaths(apiId, paths, resources, callback) {
+    forEachCallback(
+      resources,
+      function(resource, stepCallback) {
 
+        if (
+          paths.some(function(path) {
+            return path.indexOf(resource.path) === 0;
+          })
+        ) {
+          stepCallback();
+          return;
+        }
+
+        console.log('Going to remove resource: ' + resource.path);
+        awsApiGateway.deleteResource(apiId, resource.id, function(error) {
+          if (error === null) {
+            resources = _.remove(resources, function(resourceWhichMayBeAlsoDeleted) {
+              return resourceWhichMayBeAlsoDeleted.path.indexOf(resource.path) === 0;
+            });
+          }
+
+          stepCallback(error);
+        });
+      },
+      callback
+    );
+  }
 
   function ensureResource(apiId, path, resources, callback) {
     var subPath;

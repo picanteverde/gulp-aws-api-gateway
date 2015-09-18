@@ -12,13 +12,17 @@ AWSApiGateway.prototype._apiRequest = function(params, callback) {
   var opts = {host: 'apigateway.' + this.region + '.amazonaws.com', path: params.url};
   var expectArray = 'expectArray' in params && !!params.expectArray;
   var payload = '';
+
+  if ('method' in params) {
+    opts.method = params.method;
+  }
+
   var sendBody = 'method' in params && params.method == 'POST';
   if (sendBody) {
     if ('data' in params) {
       payload = JSON.stringify(params.data);
     }
 
-    opts.method = params.method;
     opts.headers = {
       'Content-Type': 'application/json',
       'Content-Length': payload.length
@@ -39,8 +43,16 @@ AWSApiGateway.prototype._apiRequest = function(params, callback) {
       body += d;
     });
     response.on('end', function() {
-      var parsed = JSON.parse(body);
-      var responseItem = '_embedded' in parsed ? parsed._embedded.item : parsed;
+      var parsed,
+          responseItem;
+
+      if (body.length === 0) {
+        callback(null);
+        return;
+      }
+
+      parsed = JSON.parse(body);
+      responseItem = '_embedded' in parsed ? parsed._embedded.item : parsed;
       utils.truncatePropertiesRecursively(responseItem, ['_links']);
       if (expectArray && !Array.isArray(responseItem)) {
         responseItem = [responseItem];
@@ -93,14 +105,19 @@ AWSApiGateway.prototype.createResource = function(apiId, parentId, pathPart, cal
         'pathPart': pathPart
       }
     },
-    function (error, resource) {
-      console.log(error);
-      console.log(resource);
-      callback(error, resource);
-    }
-
+    callback
   );
-}
+};
+
+AWSApiGateway.prototype.deleteResource = function(apiId, resourceId, callback) {
+  this._apiRequest(
+    {
+      url: '/restapis/' + apiId + '/resources/' + resourceId,
+      method: 'DELETE'
+    },
+    callback
+  );
+};
 
 //AWSApiGateway.prototype.getRestApiByName = function(name, callback) {
 //  this.getRestApis(
