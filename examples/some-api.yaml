@@ -1,0 +1,25 @@
+apiName: test
+stageName: v1
+#baseUrl: /v1
+#domain: ~
+common:
+  headers:
+    Access-Control-Allow-Origin: '*'
+structure:
+  /:
+    get:
+      type: proxy
+      url: http://example.com/
+  /blog/post/{id}:
+    get:
+      type: proxy
+      url: http://example.com/post/{id}
+  /blog/post:
+    post: #Access-Control-Allow-Methods for OPTIONS should be generated automatically here
+      type: proxy
+      url: http://example.com/post
+      responseCodes:
+        - 200
+        - 404
+        - 400
+

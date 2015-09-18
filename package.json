@@ -1,0 +1,17 @@
+{
+  "name": "gulp-aws-api-gateway",
+  "version": "0.0.1",
+  "description": "Gulp plugin to integrate with AWS Gateway API service",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Wiktor Toporek",
+  "license": "MIT",
+  "dependencies": {
+    "aws4": "^1.0.4",
+    "gulp-util": "^3.0.6",
+    "js-yaml": "^3.4.2",
+    "lodash": "^3.10.1"
+  }
+}
