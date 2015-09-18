@@ -10,16 +10,51 @@ structure:
     get:
       type: proxy
       url: http://example.com/
-  /blog/post/{id}:
+  /blog:
     get:
       type: proxy
-      url: http://example.com/post/{id}
-  /blog/post:
+      url: https://example.com/blog
+
+  /blog/{blogId}:
+    get:
+      type: proxy
+      url: https://example.com/blog/{blogId}
+
+  /blog/{blogId}/post/{postId}:
+    get:
+      type: proxy
+      url: http://example.com/blog/{blogId}/post/{postId}
+
+  /blog/{blogId}/post:
     post: #Access-Control-Allow-Methods for OPTIONS should be generated automatically here
       type: proxy
-      url: http://example.com/post
+      url: http://example.com/blog/{blogId}/post
       responseCodes:
         - 200
         - 404
         - 400
 
+  /blog/{blogId}/author:
+    get:
+      type: proxy
+      url: http://example.com/blog/{blogId}/author
+
+  /blog/{blogId}/author/{authorId}:
+    get:
+      type: proxy
+      url: http://example.com/blog/{blogId}/author/{authorId}
+
+  /blog/{blogId}/author:
+    post:
+      type: proxy
+      url: http://example.com/blog/{blogId}/author
+
+  /blog/{blogId}/post/{postId}/comment:
+    post:
+      type: proxy
+      url: http://example.com/blog/{blogId}/post/{postId}/comment
+
+  /blog/{blogId}/post/{postId}/comment/{commentId}:
+    get:
+      type: proxy
+      url: http://example.com/blog/{blogId}/post/{postId}/comment/{commentId}
