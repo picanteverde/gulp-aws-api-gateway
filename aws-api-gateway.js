@@ -145,37 +145,44 @@ AWSApiGateway.prototype.deleteResource = function(apiId, resourceId, callback) {
 };
 
 AWSApiGateway.prototype.getMethods = function(apiId, resourceId, callback) {
-  return this._apiRequest(
-    {
-      url: '/restapis/' + apiId + '/resources/' + resourceId + '?embed',
-      links: true
-    },
-    function(error, resource) {
-      if (error) {
-        callback(error);
-        return;
+  var gatewayInstance = this;
+  var promise = gatewayInstance._apiRequest(
+      {
+        url: '/restapis/' + apiId + '/resources/' + resourceId + '?embed',
+        links: true
       }
-
-      if (false === 'resource:methods' in resource._links) {
-        callback(null, []);
-        return;
-      }
-
-      if (false === Array.isArray(resource._links['resource:methods'])) {
-        callback(null, [resource._links['resource:methods'].name]);
-        return;
-      }
-
-      callback(
-        null,
-        resource._links['resource:methods'].map(
-          function(methodLink){
-            return methodLink.name;
+    )
+      .then(
+        function(resource) {
+          if (false === 'resource:methods' in resource._links) {
+            return [];
           }
-        )
+
+          if (false === Array.isArray(resource._links['resource:methods'])) {
+            return [resource._links['resource:methods'].name];
+          }
+
+          return resource._links['resource:methods'].map(
+            function(methodLink){
+              return methodLink.name;
+            }
+          );
+
+        }
       );
-    }
-  );
+
+
+  if (callback) {
+    promise.then(
+      function(methods) {
+        callback(null, methods);
+      },
+      callback
+    );
+  }
+
+  return promise;
+
 
   //return this._apiRequest(
   //  {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods'},
