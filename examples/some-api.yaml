@@ -26,18 +26,13 @@ structure:
       url: http://example.com/blog/{blogId}/post/{postId}
 
   /blog/{blogId}/post:
-    post: #Access-Control-Allow-Methods for OPTIONS should be generated automatically here
+    put: #Access-Control-Allow-Methods for OPTIONS should be generated automatically here
       type: proxy
       url: http://example.com/blog/{blogId}/post
       responseCodes:
         - 200
         - 404
         - 400
-
-  /blog/{blogId}/author:
-    get:
-      type: proxy
-      url: http://example.com/blog/{blogId}/author
 
   /blog/{blogId}/author/{authorId}:
     get:
