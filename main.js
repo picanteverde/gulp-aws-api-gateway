@@ -34,8 +34,9 @@ function gulpAwsApiGateway(awsCredentials) {
     awsCredentials.region,
     awsCredentials.accessKeyId,
     awsCredentials.secretAccessKey
-  ));
-
+  ), gutil.log, function(error) {
+    throw new PluginError(PLUGIN_NAME, error);
+  });
 
   return through.obj(function(file, enc, cb) {
     if (file.isNull()) {
@@ -53,7 +54,7 @@ function gulpAwsApiGateway(awsCredentials) {
 
       case 'json':
         spec = JSON.parse(file.contents);
-        break
+        break;
 
       default:
         cb(null, file);

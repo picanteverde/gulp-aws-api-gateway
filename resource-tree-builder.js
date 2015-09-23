@@ -2,7 +2,7 @@ var _ = require('lodash');
 var asyncForEach = require('./async-for-each.js');
 var Promise = require('bluebird');
 
-module.exports = function(awsApiGateway) {
+module.exports = function(awsApiGateway, log, throwError) {
   function generateResourceTree(apiId, paths) {
     return awsApiGateway.getResources(apiId)
       .then(
@@ -36,7 +36,7 @@ module.exports = function(awsApiGateway) {
           return Promise.resolve();
         }
 
-        console.log('Going to remove resource: ' + resource.path);
+        log('Going to remove resource: ' + resource.path);
         return awsApiGateway.deleteResource(apiId, resource.id)
           .then(function() {
             resources = _.remove(resources, function(resourceWhichMayBeAlsoDeleted) {
@@ -71,7 +71,7 @@ module.exports = function(awsApiGateway) {
         resources
       ).then(
         function() {
-          console.log('Creating resource: ' + path + '...');
+          log('Creating resource: ' + path + '...');
           return createResource(path).then(
             function(resource) {
               resources.push(resource);

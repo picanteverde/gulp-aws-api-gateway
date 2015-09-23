@@ -2,21 +2,17 @@ var asyncForEach = require('./async-for-each.js');
 var _ = require('lodash');
 var Promise = require('bluebird');
 
-module.exports = function(awsApiGateway, gutil) {
+module.exports = function(awsApiGateway, log, throwError) {
 
-  var generateResourceTree = require('./resource-tree-builder.js')(awsApiGateway);
-
-  var log = function(){},
-      throwError = function(){};
-
-  if (gutil === undefined) {
-    log = console.log;
-    throwError = console.error;
-  } else if (typeof gutil === 'object') {
-    log = gutil.log;
-    //throwError =
+  if (!log) {
+    log = console.log.bind(console);
+  }
+  if (!throwError) {
+    throwError = console.error.bind(console);
   }
 
+  var generateResourceTree = require('./resource-tree-builder.js')(awsApiGateway, log, throwError);
+  
   function getApiIdByName(apiName) {
     return awsApiGateway.getRestApis()
       .then(
@@ -52,7 +48,7 @@ module.exports = function(awsApiGateway, gutil) {
                           return Promise.resolve();
                         }
 
-                        console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
+                        log('Creating ' + httpMethod + ' method in: ' + path + '...');
                         return awsApiGateway.createMethod(apiId, resourceId, httpMethod);
                       }
                     );
@@ -86,7 +82,7 @@ module.exports = function(awsApiGateway, gutil) {
                         return Promise.resolve();
                       }
 
-                      console.log('Removing unused ' + method + ' method in ' + resource.path + '...');
+                      log('Removing unused ' + method + ' method in ' + resource.path + '...');
                       return awsApiGateway.deleteMethod(apiId, resource.id, method);
 
                     }
@@ -103,7 +99,7 @@ module.exports = function(awsApiGateway, gutil) {
   return function ApiSpecBuilder(spec) {
     return getApiIdByName(spec.apiName).then(
       function(apiId) {
-        console.log('Updating resources tree structure...');
+        log('Updating resources tree structure...');
 
         //Generate resource tree
         return generateResourceTree(
@@ -113,9 +109,9 @@ module.exports = function(awsApiGateway, gutil) {
 
           //Update HTTP methods
           .then(function() {
-            console.log('Resource tree structure is up to date.');
+            log('Resource tree structure is up to date.');
 
-            console.log('Updating HTTP methods...');
+            log('Updating HTTP methods...');
             return removeUnusedMethods(apiId, spec.structure);
           })
 
@@ -125,7 +121,7 @@ module.exports = function(awsApiGateway, gutil) {
           })
 
           .catch(function(error) {
-            console.error(error);
+            throwError(error);
           });
 
       }
