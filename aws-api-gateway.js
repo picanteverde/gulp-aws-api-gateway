@@ -1,6 +1,7 @@
 var https = require('https'),
     aws4  = require('aws4'),
-    utils = require('./utils.js');
+    utils = require('./utils.js'),
+    Promise = require("bluebird");
 
 function AWSApiGateway(region, accessKeyId, secretAccessKey) {
   this.region = region;
@@ -9,78 +10,92 @@ function AWSApiGateway(region, accessKeyId, secretAccessKey) {
 }
 
 AWSApiGateway.prototype._apiRequest = function(params, callback) {
-  var opts = {host: 'apigateway.' + this.region + '.amazonaws.com', path: params.url};
-  var expectArray = 'expectArray' in params && !!params.expectArray;
-  var payload = '';
+  var gatewayInstance = this;
+  var promise = new Promise(function(resolve, reject) {
+    var opts = {host: 'apigateway.' + gatewayInstance.region + '.amazonaws.com', path: params.url};
+    var expectArray = 'expectArray' in params && !!params.expectArray;
+    var payload = '';
 
-  if ('method' in params) {
-    opts.method = params.method;
-  }
-
-  var sendBody = 'method' in params && (-1 !== ['POST', 'PUT'].indexOf(params.method));
-  if (sendBody) {
-    if ('data' in params) {
-      payload = JSON.stringify(params.data);
+    if ('method' in params) {
+      opts.method = params.method;
     }
 
-    opts.headers = {
-      'Content-Type': 'application/json',
-      'Content-Length': payload.length
-    };
+    var sendBody = 'method' in params && (-1 !== ['POST', 'PUT'].indexOf(params.method));
+    if (sendBody) {
+      if ('data' in params) {
+        payload = JSON.stringify(params.data);
+      }
 
-    opts.body = payload;
+      opts.headers = {
+        'Content-Type': 'application/json',
+        'Content-Length': payload.length
+      };
 
-  }
+      opts.body = payload;
 
-  aws4.sign(opts, {
-    accessKeyId: this.accessKeyId,
-    secretAccessKey: this.secretAccessKey
-  });
+    }
 
-  var request = https.request(opts, function(response) {
-    var body = '';
-    response.on('data', function(d) {
-      body += d;
+    aws4.sign(opts, {
+      accessKeyId: gatewayInstance.accessKeyId,
+      secretAccessKey: gatewayInstance.secretAccessKey
     });
-    response.on('end', function() {
-      var parsed,
+
+    var request = https.request(opts, function(response) {
+      var body = '';
+      response.on('data', function(d) {
+        body += d;
+      });
+      response.on('end', function() {
+        var parsed,
           responseItem;
 
-      if ('log' in params) {
-        console.log(body);
-      }
+        if ('log' in params) {
+          console.log(body);
+        }
 
-      if (body.length === 0) {
-        callback(null);
-        return;
-      }
+        if (body.length === 0) {
+          resolve();
+          return;
+        }
 
-      try {parsed = JSON.parse(body);} catch (e) {
-        callback(e, null);
-        return;
-      }
+        try {parsed = JSON.parse(body);} catch (e) {
+          reject(e);
+          return;
+        }
 
-      responseItem = ('_embedded' in parsed && 'item' in parsed._embedded) ? parsed._embedded.item : parsed;
-      if ((false === 'links' in params) || !params.links) {
-        utils.truncatePropertiesRecursively(responseItem, ['_links']);
-      }
-      if (expectArray && !Array.isArray(responseItem)) {
-        responseItem = [responseItem];
-      }
-      callback(null, responseItem);
+        responseItem = ('_embedded' in parsed && 'item' in parsed._embedded) ? parsed._embedded.item : parsed;
+        if ((false === 'links' in params) || !params.links) {
+          utils.truncatePropertiesRecursively(responseItem, ['_links']);
+        }
+        if (expectArray && !Array.isArray(responseItem)) {
+          responseItem = [responseItem];
+        }
+        resolve(responseItem);
+      });
     });
+
+    if (sendBody) {
+      request.write(payload);
+    }
+
+    request.end();
   });
 
-  if (sendBody) {
-    request.write(payload);
+  if (callback) {
+    promise.then(
+      function(result) {
+        callback(null, result);
+      },
+      callback
+    );
   }
 
-  request.end();
+  return promise;
 
 };
 
 AWSApiGateway.prototype.getRestApis = function(limit, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis' + (limit ? ('?' + limit) : ''),
       expectArray: true
@@ -90,14 +105,14 @@ AWSApiGateway.prototype.getRestApis = function(limit, callback) {
 };
 
 AWSApiGateway.prototype.getRestApiById = function(id, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {url: '/restapis/' + id},
     callback
   );
 };
 
 AWSApiGateway.prototype.getResources = function(apiId, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources?limit=500',
       expectArray: true
@@ -107,7 +122,7 @@ AWSApiGateway.prototype.getResources = function(apiId, callback) {
 };
 
 AWSApiGateway.prototype.createResource = function(apiId, parentId, pathPart, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources/' + parentId,
       method: 'POST',
@@ -120,7 +135,7 @@ AWSApiGateway.prototype.createResource = function(apiId, parentId, pathPart, cal
 };
 
 AWSApiGateway.prototype.deleteResource = function(apiId, resourceId, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources/' + resourceId,
       method: 'DELETE'
@@ -130,7 +145,7 @@ AWSApiGateway.prototype.deleteResource = function(apiId, resourceId, callback) {
 };
 
 AWSApiGateway.prototype.getMethods = function(apiId, resourceId, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources/' + resourceId + '?embed',
       links: true
@@ -162,14 +177,14 @@ AWSApiGateway.prototype.getMethods = function(apiId, resourceId, callback) {
     }
   );
 
-  //this._apiRequest(
+  //return this._apiRequest(
   //  {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods'},
   //  callback
   //);
 };
 
 AWSApiGateway.prototype.getMethod = function(apiId, resourceId, httpMethod, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod},
     callback
   );
@@ -202,7 +217,7 @@ AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callb
     }
   }
 
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
       method: 'PUT',
@@ -214,7 +229,7 @@ AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callb
 };
 
 AWSApiGateway.prototype.deleteMethod = function(apiId, resourceId, httpMethod, callback) {
-  this._apiRequest(
+  return this._apiRequest(
     {
       url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
       method: 'DELETE'
