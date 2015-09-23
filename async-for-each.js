@@ -5,7 +5,7 @@ function isPromise(object) {
     object.constructor.name === 'Promise';
 }
 
-module.exports = function forEachCallback(array, stepFunction, finishCallback, index) {
+module.exports = function asyncForEach(array, stepFunction, finishCallback, index) {
   if (index === undefined) {
     index = array.length - 1;
   }
@@ -31,13 +31,13 @@ module.exports = function forEachCallback(array, stepFunction, finishCallback, i
       return;
     }
 
-    forEachCallback(array, stepFunction, finishCallback, index-1);
+    asyncForEach(array, stepFunction, finishCallback, index-1);
   });
 
   if (isPromise(stepImmediateResult)) {
     return stepImmediateResult.then(
       function() {
-        return forEachCallback(array, stepFunction, finishCallback, index-1);
+        return asyncForEach(array, stepFunction, finishCallback, index-1);
       }
     );
   }
