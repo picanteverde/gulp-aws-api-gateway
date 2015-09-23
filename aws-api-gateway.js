@@ -17,7 +17,7 @@ AWSApiGateway.prototype._apiRequest = function(params, callback) {
     opts.method = params.method;
   }
 
-  var sendBody = 'method' in params && params.method == 'POST';
+  var sendBody = 'method' in params && (-1 !== ['POST', 'PUT'].indexOf(params.method));
   if (sendBody) {
     if ('data' in params) {
       payload = JSON.stringify(params.data);
@@ -46,14 +46,24 @@ AWSApiGateway.prototype._apiRequest = function(params, callback) {
       var parsed,
           responseItem;
 
+      if ('log' in params) {
+        console.log(body);
+      }
+
       if (body.length === 0) {
         callback(null);
         return;
       }
 
-      parsed = JSON.parse(body);
-      responseItem = '_embedded' in parsed ? parsed._embedded.item : parsed;
-      utils.truncatePropertiesRecursively(responseItem, ['_links']);
+      try {parsed = JSON.parse(body);} catch (e) {
+        callback(e, null);
+        return;
+      }
+
+      responseItem = ('_embedded' in parsed && 'item' in parsed._embedded) ? parsed._embedded.item : parsed;
+      if ((false === 'links' in params) || !params.links) {
+        utils.truncatePropertiesRecursively(responseItem, ['_links']);
+      }
       if (expectArray && !Array.isArray(responseItem)) {
         responseItem = [responseItem];
       }
@@ -119,25 +129,88 @@ AWSApiGateway.prototype.deleteResource = function(apiId, resourceId, callback) {
   );
 };
 
-//AWSApiGateway.prototype.getRestApiByName = function(name, callback) {
-//  this.getRestApis(
-//    500,
-//    function(error, response) {
-//      if (error) {
-//        callback(error);
-//        return;
-//      }
-//
-//      for (var i in response) {
-//        if (response[i].name === name) {
-//          callback(null, response[i].id);
-//          return;
-//        }
-//      }
-//
-//
-//    }
-//  );
-//};
+AWSApiGateway.prototype.getMethods = function(apiId, resourceId, callback) {
+  this._apiRequest(
+    {
+      url: '/restapis/' + apiId + '/resources/' + resourceId + '?embed',
+      links: true
+    },
+    function(error, resource) {
+      if (error) {
+        callback(error);
+        return;
+      }
+
+      if (false === 'resource:methods' in resource._links) {
+        callback(null, []);
+        return;
+      }
+
+      if (false === Array.isArray(resource._links['resource:methods'])) {
+        callback(null, [resource._links['resource:methods'].name]);
+        return;
+      }
+
+      callback(
+        null,
+        resource._links['resource:methods'].map(
+          function(methodLink){
+            return methodLink.name;
+          }
+        )
+      );
+    }
+  );
+
+  //this._apiRequest(
+  //  {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods'},
+  //  callback
+  //);
+};
+
+AWSApiGateway.prototype.getMethod = function(apiId, resourceId, httpMethod, callback) {
+  this._apiRequest(
+    {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod},
+    callback
+  );
+};
+
+AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callback) {
+  var httpMethod,
+      methodConfig = {
+        "apiKeyRequired": false,
+        "authorizationType": 'NONE',
+        "requestParameters": {},
+        "requestModels": {}
+      };
+
+  if (typeof config === 'string') {
+    httpMethod = config;
+  } else {
+    for (var key in config) {
+      if (key === 'httpMethod') {
+        httpMethod = methodConfig[key];
+      }
+      methodConfig[key] = config[key];
+    }
+
+    if (!httpMethod) {
+      process.nextTick(function() {
+        callback('No "httpMethod" provided in "config" parameter.');
+      });
+      return;
+    }
+  }
+
+  this._apiRequest(
+    {
+      url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
+      method: 'PUT',
+      data: methodConfig
+    },
+    callback
+  );
+
+};
 
 module.exports = AWSApiGateway;

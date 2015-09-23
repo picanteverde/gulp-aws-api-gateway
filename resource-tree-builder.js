@@ -57,7 +57,6 @@ module.exports = function(awsApiGateway) {
   }
 
   function ensureResource(apiId, path, resources, callback) {
-    var subPath;
     var pathNodes = path.split('/');
 
     if (path === '') {

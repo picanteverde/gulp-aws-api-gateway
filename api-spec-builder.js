@@ -1,3 +1,6 @@
+var forEachCallback = require('./for-each-callback.js');
+var _ = require('lodash');
+
 module.exports = function(awsApiGateway, gutil) {
 
   var generateResourceTree = require('./resource-tree-builder.js')(awsApiGateway);
@@ -26,9 +29,34 @@ module.exports = function(awsApiGateway, gutil) {
     });
   }
 
+  function generateMethods(apiId, structure, callback) {
+    awsApiGateway.getResources(
+      apiId,
+      function(error, resources) {
+        forEachCallback(
+          Object.keys(structure),
+          function (path, nextStep) {
+            var resourceId = _.find(resources, {'path': path}).id;
+
+            forEachCallback(
+              Object.keys(structure[path]),
+              function (httpMethod, nextStep) {
+                httpMethod = httpMethod.toUpperCase();
+                console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
+                awsApiGateway.createMethod(apiId, resourceId, httpMethod, nextStep);
+              },
+              nextStep
+            );
+
+          },
+          callback
+        );
+      }
+    );
+  }
 
 
-  return function ApiSpecBulder(spec, callback) {
+  return function ApiSpecBuilder(spec, callback) {
     getApiIdByName(
       spec.apiName,
       function(error, apiId) {
@@ -44,8 +72,11 @@ module.exports = function(awsApiGateway, gutil) {
             }
 
             console.log('resource tree generated sucessfully');
+            generateMethods(apiId, spec.structure, callback);
           }
         );
+
+
 
       }
     );
