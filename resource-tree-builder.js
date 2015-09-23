@@ -1,104 +1,89 @@
 var _ = require('lodash');
 var forEachCallback = require('./for-each-callback.js');
+var Promise = require('bluebird');
 
 module.exports = function(awsApiGateway) {
-  function generateResourceTree(apiId, paths, callback) {
-    awsApiGateway.getResources(
-      apiId,
-      function(error, resources) {
-
-        removeUnusedResourcePaths(apiId, paths, resources, function(error) {
-          if (error) {
-            callback(error);
-            return;
-          }
-
-          forEachCallback(
+  function generateResourceTree(apiId, paths) {
+    return awsApiGateway.getResources(apiId)
+      .then(
+        function(resources) {
+          return removeUnusedResourcePaths(apiId, paths, resources);
+        }
+      )
+      .then(
+        function(resourcesLeft) {
+          return forEachCallback(
             paths,
-            function(path, nextStep) {
-              ensureResource(apiId, path, resources, nextStep);
-            },
-            callback
-          );
-
-        });
-
-      }
-    );
+            function(path) {
+              return ensureResource(apiId, path, resourcesLeft);
+            }
+          )
+        }
+      )
+    ;
   }
 
-  function removeUnusedResourcePaths(apiId, paths, resources, callback) {
-    forEachCallback(
+  function removeUnusedResourcePaths(apiId, paths, resources) {
+    return forEachCallback(
       resources,
-      function(resource, stepCallback) {
+      function(resource) {
 
         if (
           paths.some(function(path) {
             return path.indexOf(resource.path) === 0;
           })
         ) {
-          stepCallback();
-          return;
+          return Promise.resolve();
         }
 
         console.log('Going to remove resource: ' + resource.path);
-        awsApiGateway.deleteResource(apiId, resource.id, function(error) {
-          if (error === null) {
+        return awsApiGateway.deleteResource(apiId, resource.id)
+          .then(function() {
             resources = _.remove(resources, function(resourceWhichMayBeAlsoDeleted) {
               return resourceWhichMayBeAlsoDeleted.path.indexOf(resource.path) === 0;
             });
-          }
-
-          stepCallback(error);
-        });
-      },
-      callback
-    );
+          })
+        ;
+      }
+    ).then(function() {
+      return resources;
+    });
   }
 
-  function ensureResource(apiId, path, resources, callback) {
-    var pathNodes = path.split('/');
+  function ensureResource(apiId, path, resources) {
+    return new Promise(function(resolve, reject) {
+      var pathNodes = path.split('/');
 
-    if (path === '') {
-      process.nextTick(function() {
-        callback(null);
-      });
-      return;
-    }
-
-    var existingResource = _.find(resources, {'path': path});
-    if (existingResource) {
-      process.nextTick(function() {
-        callback(null);
-      });
-      return;
-    }
-
-    ensureResource(
-      apiId,
-      pathNodes.slice(0, -1).join('/'),
-      resources,
-      function(error) {
-        if (error) {
-          callback(error);
-          return;
-        }
-
-        console.log('Creating resource: ' + path + '...');
-        createResource(path, function(error, resource) {
-          if (error) {
-            callback(error);
-            return;
-          }
-
-          resources.push(resource);
-          callback(null);
-        })
+      if (path === '') {
+        resolve();
+        return;
       }
-    );
+
+      var existingResource = _.find(resources, {'path': path});
+      if (existingResource) {
+        resolve();
+        return;
+      }
+
+      ensureResource(
+        apiId,
+        pathNodes.slice(0, -1).join('/'),
+        resources
+      ).then(
+        function() {
+          console.log('Creating resource: ' + path + '...');
+          return createResource(path).then(
+            function(resource) {
+              resources.push(resource);
+              return resource;
+            }
+          );
+        }
+      ).then(resolve, reject);
+    });
 
 
-    function createResource(path, callback) {
+    function createResource(path) {
       var parentPath = path.split('/').slice(0, -1).join('/');
       var parentId = _.result(
         _.find(
@@ -108,15 +93,12 @@ module.exports = function(awsApiGateway) {
         'id'
       );
 
-      awsApiGateway.createResource(
+      return awsApiGateway.createResource(
         apiId,
         parentId,
-        path.split('/').pop(),
-        callback
+        path.split('/').pop()
       );
     }
-
-    _.find(resources, {'path': path})
   }
 
   return generateResourceTree;

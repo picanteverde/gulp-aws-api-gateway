@@ -124,21 +124,20 @@ module.exports = function(awsApiGateway, gutil) {
         console.log('Updating resources tree structure...');
         generateResourceTree(
           apiId,
-          Object.keys(spec.structure),
-          function(error) {
-            if (error) {
-              console.error('Resource tree generation failed!');
-              return;
-            }
-
+          Object.keys(spec.structure)
+        )
+          .then(function() {
             console.log('Resource tree structure is up to date.');
 
             console.log('Updating HTTP methods...');
             removeUnusedMethods(apiId, spec.structure, function(error) {
               generateMethods(apiId, spec.structure, callback);
             });
-          }
-        );
+          })
+          .catch(function(error) {
+            console.error('Resource tree generation failed!');
+          })
+        ;
 
 
 
