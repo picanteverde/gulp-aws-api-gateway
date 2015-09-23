@@ -1,5 +1,6 @@
 var forEachCallback = require('./for-each-callback.js');
 var _ = require('lodash');
+var Promise = require('bluebird');
 
 module.exports = function(awsApiGateway, gutil) {
 
@@ -16,130 +17,116 @@ module.exports = function(awsApiGateway, gutil) {
     //throwError =
   }
 
-  function getApiIdByName(apiName, callback) {
-    awsApiGateway.getRestApis(null, function(error, apis) {
-      for (var i in apis) {
-        if (apis[i].name === apiName) {
-          callback(null, apis[i].id);
-          return;
+  function getApiIdByName(apiName) {
+    return awsApiGateway.getRestApis()
+      .then(
+        function(apis) {
+          for (var i in apis) {
+            if (apis[i].name === apiName) {
+              return Promise.resolve(apis[i].id);
+            }
+          }
+
+          return Promise.reject("API with the specified name couldn't been found.");
         }
-      }
-
-      callback("API with the specified name couldn't been found.");
-    });
+      );
   }
 
-  function generateMethods(apiId, structure, callback) {
-    awsApiGateway.getResources(
-      apiId,
-      function(error, resources) {
-        forEachCallback(
-          Object.keys(structure),
-          function (path, nextStep) {
-            var resourceId = _.find(resources, {'path': path}).id;
+  function generateMethods(apiId, structure) {
+    return awsApiGateway.getResources(apiId)
+      .then(
+        function(resources) {
+          return forEachCallback(
+            Object.keys(structure),
+            function (path) {
+              var resourceId = _.find(resources, {'path': path}).id;
 
-            awsApiGateway.getMethods(
-              apiId,
-              resourceId,
-              function(error, methods) {
-                if (error) {
-                  nextStep(error);
-                  return;
-                }
+              return awsApiGateway.getMethods(apiId, resourceId)
+                .then(
+                  function(methods) {
+                    return forEachCallback(
+                      Object.keys(structure[path]),
+                      function (httpMethod) {
+                        httpMethod = httpMethod.toUpperCase();
+                        if (-1 !== methods.indexOf(httpMethod)) {
+                          return Promise.resolve();
+                        }
 
-                forEachCallback(
-                  Object.keys(structure[path]),
-                  function (httpMethod, nextStep) {
-                    httpMethod = httpMethod.toUpperCase();
-                    if (-1 !== methods.indexOf(httpMethod)) {
-                      nextStep();
-                      return;
-                    }
-
-                    console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
-                    awsApiGateway.createMethod(apiId, resourceId, httpMethod, nextStep);
-                  },
-                  nextStep
+                        console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
+                        return awsApiGateway.createMethod(apiId, resourceId, httpMethod);
+                      }
+                    );
+                  }
                 );
-              }
-            );
-
-          },
-          callback
-        );
-      }
-    );
+            }
+          );
+        }
+      );
   }
 
-  function removeUnusedMethods(apiId, structure, callback) {
-    awsApiGateway.getResources(
-      apiId,
-      function(error, resources) {
-        forEachCallback(
-          resources,
-          function (resource, nextStep) {
-            awsApiGateway.getMethods(
-              apiId,
-              resource.id,
-              function(error, methods) {
-                if (error) {
-                  nextStep(error);
-                  return;
-                }
+  function removeUnusedMethods(apiId, structure) {
+    return awsApiGateway.getResources(apiId)
+      .then(
+        function(resources) {
+          return forEachCallback(
+            resources,
+            function (resource) {
+              return awsApiGateway.getMethods(
+                apiId,
+                resource.id
+              ).then(
+                function(methods) {
+                  return forEachCallback(
+                    methods,
+                    function(method) {
+                      if (
+                        resource.path in structure &&
+                        method.toLowerCase() in structure[resource.path]
+                      ) {
+                        return Promise.resolve();
+                      }
 
-                forEachCallback(
-                  methods,
-                  function(method, nextStep) {
-                    if (
-                      resource.path in structure &&
-                      method.toLowerCase() in structure[resource.path]
-                    ) {
-                      nextStep();
-                      return;
+                      console.log('Removing unused ' + method + ' method in ' + resource.path + '...');
+                      return awsApiGateway.deleteMethod(apiId, resource.id, method);
+
                     }
-
-                    console.log('Removing unused ' + method + ' method in ' + resource.path + '...');
-                    awsApiGateway.deleteMethod(apiId, resource.id, method, nextStep);
-
-                  },
-                  nextStep
-                );
-
-              }
-            );
-          },
-          callback
-        );
-      }
-    );
+                  );
+                }
+              );
+            }
+          );
+        }
+      );
   }
 
 
-  return function ApiSpecBuilder(spec, callback) {
-    getApiIdByName(
-      spec.apiName,
-      function(error, apiId) {
-        if (error) return throwError(error);
-
+  return function ApiSpecBuilder(spec) {
+    return getApiIdByName(spec.apiName).then(
+      function(apiId) {
         console.log('Updating resources tree structure...');
-        generateResourceTree(
+
+        //Generate resource tree
+        return generateResourceTree(
           apiId,
           Object.keys(spec.structure)
         )
+
+          //Update HTTP methods
           .then(function() {
             console.log('Resource tree structure is up to date.');
 
             console.log('Updating HTTP methods...');
-            removeUnusedMethods(apiId, spec.structure, function(error) {
-              generateMethods(apiId, spec.structure, callback);
-            });
+            return removeUnusedMethods(apiId, spec.structure);
           })
+
+          //Generate missing HTTP methods
+          .then(function() {
+            return generateMethods(apiId, spec.structure);
+          })
+
           .catch(function(error) {
-            console.error('Resource tree generation failed!');
-          })
-        ;
-
-
+            console.error(error);
+          });
 
       }
     );
