@@ -74,7 +74,6 @@ module.exports = function(awsApiGateway) {
       return;
     }
 
-    console.log(path + ' missing');
     ensureResource(
       apiId,
       pathNodes.slice(0, -1).join('/'),
@@ -85,6 +84,7 @@ module.exports = function(awsApiGateway) {
           return;
         }
 
+        console.log('Creating resource: ' + path + '...');
         createResource(path, function(error, resource) {
           if (error) {
             callback(error);

@@ -67,11 +67,11 @@ module.exports = function(awsApiGateway, gutil) {
           Object.keys(spec.structure),
           function(error) {
             if (error) {
-              console.error('resource tree generation failed!');
+              console.error('Resource tree generation failed!');
               return;
             }
 
-            console.log('resource tree generated sucessfully');
+            console.log('Resource tree generated sucessfully');
             generateMethods(apiId, spec.structure, callback);
           }
         );
