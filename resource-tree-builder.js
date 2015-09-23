@@ -1,5 +1,5 @@
 var _ = require('lodash');
-var forEachCallback = require('./for-each-callback.js');
+var asyncForEach = require('./async-for-each.js');
 var Promise = require('bluebird');
 
 module.exports = function(awsApiGateway) {
@@ -12,7 +12,7 @@ module.exports = function(awsApiGateway) {
       )
       .then(
         function(resourcesLeft) {
-          return forEachCallback(
+          return asyncForEach(
             paths,
             function(path) {
               return ensureResource(apiId, path, resourcesLeft);
@@ -24,7 +24,7 @@ module.exports = function(awsApiGateway) {
   }
 
   function removeUnusedResourcePaths(apiId, paths, resources) {
-    return forEachCallback(
+    return asyncForEach(
       resources,
       function(resource) {
 

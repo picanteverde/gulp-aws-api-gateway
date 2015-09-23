@@ -1,4 +1,4 @@
-var forEachCallback = require('./for-each-callback.js');
+var asyncForEach = require('./async-for-each.js');
 var _ = require('lodash');
 var Promise = require('bluebird');
 
@@ -36,7 +36,7 @@ module.exports = function(awsApiGateway, gutil) {
     return awsApiGateway.getResources(apiId)
       .then(
         function(resources) {
-          return forEachCallback(
+          return asyncForEach(
             Object.keys(structure),
             function (path) {
               var resourceId = _.find(resources, {'path': path}).id;
@@ -44,7 +44,7 @@ module.exports = function(awsApiGateway, gutil) {
               return awsApiGateway.getMethods(apiId, resourceId)
                 .then(
                   function(methods) {
-                    return forEachCallback(
+                    return asyncForEach(
                       Object.keys(structure[path]),
                       function (httpMethod) {
                         httpMethod = httpMethod.toUpperCase();
@@ -68,7 +68,7 @@ module.exports = function(awsApiGateway, gutil) {
     return awsApiGateway.getResources(apiId)
       .then(
         function(resources) {
-          return forEachCallback(
+          return asyncForEach(
             resources,
             function (resource) {
               return awsApiGateway.getMethods(
@@ -76,7 +76,7 @@ module.exports = function(awsApiGateway, gutil) {
                 resource.id
               ).then(
                 function(methods) {
-                  return forEachCallback(
+                  return asyncForEach(
                     methods,
                     function(method) {
                       if (
