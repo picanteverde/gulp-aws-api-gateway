@@ -38,16 +38,75 @@ module.exports = function(awsApiGateway, gutil) {
           function (path, nextStep) {
             var resourceId = _.find(resources, {'path': path}).id;
 
-            forEachCallback(
-              Object.keys(structure[path]),
-              function (httpMethod, nextStep) {
-                httpMethod = httpMethod.toUpperCase();
-                console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
-                awsApiGateway.createMethod(apiId, resourceId, httpMethod, nextStep);
-              },
-              nextStep
+            awsApiGateway.getMethods(
+              apiId,
+              resourceId,
+              function(error, methods) {
+                if (error) {
+                  nextStep(error);
+                  return;
+                }
+
+                forEachCallback(
+                  Object.keys(structure[path]),
+                  function (httpMethod, nextStep) {
+                    httpMethod = httpMethod.toUpperCase();
+                    if (-1 !== methods.indexOf(httpMethod)) {
+                      nextStep();
+                      return;
+                    }
+
+                    console.log('Creating ' + httpMethod + ' method in: ' + path + '...');
+                    awsApiGateway.createMethod(apiId, resourceId, httpMethod, nextStep);
+                  },
+                  nextStep
+                );
+              }
             );
 
+          },
+          callback
+        );
+      }
+    );
+  }
+
+  function removeUnusedMethods(apiId, structure, callback) {
+    awsApiGateway.getResources(
+      apiId,
+      function(error, resources) {
+        forEachCallback(
+          resources,
+          function (resource, nextStep) {
+            awsApiGateway.getMethods(
+              apiId,
+              resource.id,
+              function(error, methods) {
+                if (error) {
+                  nextStep(error);
+                  return;
+                }
+
+                forEachCallback(
+                  methods,
+                  function(method, nextStep) {
+                    if (
+                      resource.path in structure &&
+                      method.toLowerCase() in structure[resource.path]
+                    ) {
+                      nextStep();
+                      return;
+                    }
+
+                    console.log('Removing unused ' + method + ' method in ' + resource.path + '...');
+                    awsApiGateway.deleteMethod(apiId, resource.id, method, nextStep);
+
+                  },
+                  nextStep
+                );
+
+              }
+            );
           },
           callback
         );
@@ -72,7 +131,9 @@ module.exports = function(awsApiGateway, gutil) {
             }
 
             console.log('Resource tree generated sucessfully');
-            generateMethods(apiId, spec.structure, callback);
+            removeUnusedMethods(apiId, spec.structure, function(error) {
+              generateMethods(apiId, spec.structure, callback);
+            });
           }
         );
 

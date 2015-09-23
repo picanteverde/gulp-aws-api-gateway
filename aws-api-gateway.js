@@ -213,4 +213,14 @@ AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callb
 
 };
 
+AWSApiGateway.prototype.deleteMethod = function(apiId, resourceId, httpMethod, callback) {
+  this._apiRequest(
+    {
+      url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
+      method: 'DELETE'
+    },
+    callback
+  );
+};
+
 module.exports = AWSApiGateway;
