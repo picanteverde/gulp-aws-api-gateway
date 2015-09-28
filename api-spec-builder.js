@@ -43,13 +43,26 @@ module.exports = function(awsApiGateway, log, throwError) {
                     return asyncForEach(
                       Object.keys(structure[path]),
                       function (httpMethod) {
+                        var methodConfig = structure[path][httpMethod];
                         httpMethod = httpMethod.toUpperCase();
+
                         if (-1 !== methods.indexOf(httpMethod)) {
+                          //TODO: ensure that integration is the same as in specs
+                          //awsApiGateway.getIntegration(apiId,resourceId, httpMethod, function(err, m) {
+                          //  console.log(m);
+                          //});
+
                           return Promise.resolve();
                         }
 
                         log('Creating ' + httpMethod + ' method in: ' + path + '...');
-                        return awsApiGateway.createMethod(apiId, resourceId, httpMethod);
+                        return awsApiGateway.createMethod(apiId, resourceId, {
+                          "httpMethod": httpMethod,
+                          "type": methodConfig.type,
+                          "integration": {
+                            "uri": methodConfig.url
+                          }
+                        });
                       }
                     );
                   }

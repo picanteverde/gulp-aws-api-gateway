@@ -1,13 +1,23 @@
 var https = require('https'),
     aws4  = require('aws4'),
     utils = require('./utils.js'),
-    Promise = require("bluebird");
+    Promise = require("bluebird"),
+    objectMerge = require('object-merge');
 
 function AWSApiGateway(region, accessKeyId, secretAccessKey) {
   this.region = region;
   this.accessKeyId = accessKeyId;
   this.secretAccessKey = secretAccessKey;
 }
+
+AWSApiGateway.INTEGRATION_TYPE_HTTP = 'HTTP';
+AWSApiGateway.INTEGRATION_TYPE_LAMBDA = 'lambda';
+AWSApiGateway.INTEGRATION_TYPE_MOCK = 'mock';
+AWSApiGateway.INTEGRATION_TYPE_AWS = 'aws';
+
+AWSApiGateway.AUTHORIZATION_TYPE_NONE = 'NONE';
+AWSApiGateway.AUTHORIZATION_TYPE_AWS_IAM = 'AWS_IAM';
+
 
 AWSApiGateway.prototype._apiRequest = function(params, callback) {
   var gatewayInstance = this;
@@ -19,6 +29,8 @@ AWSApiGateway.prototype._apiRequest = function(params, callback) {
     if ('method' in params) {
       opts.method = params.method;
     }
+
+    console.log(params.url);
 
     var sendBody = 'method' in params && (-1 !== ['POST', 'PUT'].indexOf(params.method));
     if (sendBody) {
@@ -197,11 +209,31 @@ AWSApiGateway.prototype.getMethod = function(apiId, resourceId, httpMethod, call
   );
 };
 
+AWSApiGateway.prototype.putIntegration = function(apiId, resourceId, httpMethod, config, callback) {
+  return this._apiRequest(
+    {
+      url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod + '/integration',
+      method: 'PUT',
+      data: config
+    },
+    callback
+  );
+};
+
+AWSApiGateway.prototype.getIntegration = function(apiId, resourceId, httpMethod, callback) {
+  return this._apiRequest(
+    {url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod + '/integration'},
+    callback
+  );
+};
+
 AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callback) {
-  var httpMethod,
+  var gatewayInstance = this,
+      promise,
+      httpMethod,
       methodConfig = {
         "apiKeyRequired": false,
-        "authorizationType": 'NONE',
+        "authorizationType": AWSApiGateway.AUTHORIZATION_TYPE_NONE,
         "requestParameters": {},
         "requestModels": {}
       };
@@ -211,29 +243,74 @@ AWSApiGateway.prototype.createMethod = function(apiId, resourceId, config, callb
   } else {
     for (var key in config) {
       if (key === 'httpMethod') {
-        httpMethod = methodConfig[key];
+        httpMethod = config[key];
+        continue;
+      }
+      if (key === 'integration') {
+        continue;
       }
       methodConfig[key] = config[key];
     }
 
     if (!httpMethod) {
-      process.nextTick(function() {
-        callback('No "httpMethod" provided in "config" parameter.');
-      });
-      return;
+      const errorMessage = 'No "httpMethod" provided in "config" parameter.';
+      if (callback) {
+        process.nextTick(function () {
+          callback(errorMessage);
+        });
+      }
+
+      return Promise.reject(errorMessage);
     }
   }
 
-  return this._apiRequest(
-    {
-      url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
-      method: 'PUT',
-      data: methodConfig
-    },
+  return promiseToCallback(
+    this._apiRequest(
+      {
+        url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod,
+        method: 'PUT',
+        data: methodConfig
+      }
+    ).then(
+      function(result) {
+        if ('integration' in config) {
+          return gatewayInstance.createIntegration(apiId, resourceId, httpMethod, config.integration);
+        }
+
+        return result;
+      }
+    ),
     callback
   );
 
 };
+
+AWSApiGateway.prototype.createIntegration = function(apiId, resourceId, httpMethod, config, callback) {
+
+  const integrationDefaults = {
+    type: AWSApiGateway.INTEGRATION_TYPE_HTTP,
+    httpMethod: httpMethod,
+    uri: '' //,
+    //credentials: AWSApiGateway.AUTHORIZATION_TYPE_NONE,
+    //requestParameters: {},
+    //requestTemplates: {},
+    //cacheNamespace: resourceId,
+    //cacheKeyParameters: []
+  };
+
+  return promiseToCallback(
+    this._apiRequest(
+      {
+        url: '/restapis/' + apiId + '/resources/' + resourceId + '/methods/' + httpMethod + '/integration',
+        method: 'PUT',
+        data: objectMerge(integrationDefaults, config)
+      }
+    ),
+    callback
+  );
+
+};
+
 
 AWSApiGateway.prototype.deleteMethod = function(apiId, resourceId, httpMethod, callback) {
   return this._apiRequest(
@@ -244,5 +321,28 @@ AWSApiGateway.prototype.deleteMethod = function(apiId, resourceId, httpMethod, c
     callback
   );
 };
+
+/**
+ * Connects promise to Node.js old callback pattern if callback is present.
+ * @param promise
+ * @param callback
+ * @returns {*}
+ */
+function promiseToCallback(promise, callback) {
+  if (callback) {
+    promise = promise.then(
+      function(result) {
+        callback(null, result);
+      },
+      function(error) {
+        callback(error);
+      }
+    );
+
+    return promise;
+  }
+
+  return promise;
+}
 
 module.exports = AWSApiGateway;

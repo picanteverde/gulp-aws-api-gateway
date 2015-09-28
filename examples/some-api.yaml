@@ -8,26 +8,26 @@ common:
 structure:
   /:
     get:
-      type: proxy
+      type: HTTP
       url: http://example.com/
   /blog:
     get:
-      type: proxy
+      type: HTTP
       url: https://example.com/blog
 
   /blog/{blogId}:
     get:
-      type: proxy
+      type: HTTP
       url: https://example.com/blog/{blogId}
 
   /blog/{blogId}/post/{postId}:
     get:
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/post/{postId}
 
   /blog/{blogId}/post:
     put: #Access-Control-Allow-Methods for OPTIONS should be generated automatically here
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/post
       responseCodes:
         - 200
@@ -36,20 +36,20 @@ structure:
 
   /blog/{blogId}/author/{authorId}:
     get:
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/author/{authorId}
 
   /blog/{blogId}/author:
     post:
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/author
 
   /blog/{blogId}/post/{postId}/comment:
     post:
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/post/{postId}/comment
 
   /blog/{blogId}/post/{postId}/comment/{commentId}:
     get:
-      type: proxy
+      type: HTTP
       url: http://example.com/blog/{blogId}/post/{postId}/comment/{commentId}
